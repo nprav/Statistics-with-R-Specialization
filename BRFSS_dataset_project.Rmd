@@ -1,0 +1,379 @@
+---
+title: "Exploring the BRFSS data"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+**Author: Praveer Nidamaluri**
+
+**Date: April 29th 2020**
+
+* * *
+
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+library(maps)
+library(stringr)
+```
+
+### Load data
+
+```{r load-data}
+load("brfss2013.RData")
+```
+
+
+
+* * *
+
+## Part 1: Data
+
+The BRFSS is a comprehensive nation-wide and annual health survey in the US. The primary objective is to "collect uniform, state-specific data on preventative heatlh practices and risk behaviours that are linked to chronic diseases, injuries, and preventable infectious diseases that affect the adult population" [1].
+
+
+**Scope of Inference - Generalizability**
+
+The **population of interest** is the adult population of the US that is over the age of 18. For the 2013 edition of the survey, this includes all 50 states in addition to other areas including D.C, Guam, and Puerto Rico.
+
+The survey collects data on the population of interest using oral questionnaires that are completed by calling nation-wide landline and cellphone telephone numbers. In the 2013 edition, a total of 491,773 completed and partial interviews were recorded [2]. 
+
+The specific set of telephone numbers are sampled separately by each state/area. Most states use a form of stratified sampling. To ensure adequate representation from less populous regions, a set of phone numbers was first stratified based on geographic region. Phone numbers to call were then randomly sampled within each stratum [1]. Other states used simple random samples to reach the choice of phone numbers [1].
+
+After contacting a potential interviewee, the interviewer requests participation of the survey. Participation is optional and no monetary compensation is provided. For landline numbers, a random member of the household is chosen to participate. For cellphone numbers, the owner of the phone is requested to participate,[1].
+
+The choice of sample results in the following possible biases relative to the population of interest:
+
+- Convenience bias: 
+
+  For practicality, the survey is conducted by telephone instead of in-person. This means that the **sample population** is technically the adult population of the US with access to a telphones (97.5% of the population per [1]). Households with more access to telephones have a greater chance of appearing in the survey. Alternatively, since landline participation is limited to 1 adult in a household, individuals from larger households are less likely to be chosen than those in smaller households. This may reduce how representable the sample is to the population of interest.
+  
+- Non-response bias:
+
+  Participation in the survey is optional. Moreover, at over 18 mins on average, they take up a considerable amount of time. As a result only a fraction of the initial sample actually responds to the survey (49.6% response rate by landline, 37.8% by cell phone [3]). As a result, the final sample may not be completely representative of the population of interest.
+  
+To address the above biases, the BRFSS applies weights to observations. A 'design weight' is applied to observations to account for the difference in likelihood for that observation being chosen based on geopraphic stratum, number of phones in a household, and number of adults in the household. In addition, a weighting methodology known as 'raking' or 'iterative proportional fitting' is used to ensure that the demographic distributions of the sample match with known distributions from other sources (eg. census data) [1]. 
+
+Ultimately, a sample can enable **generalizable** inferences provided that the sample is representative of the population of interest. Considering the thoroughness of the state-by-state sampling, and the additional weighting corrections, the BRFSS dataset is considered representative of the population. 
+
+
+**Scope of Inference - Causality**
+
+Studies performed using data from the BRFSS surveys would only be able to prove correlational relationships. This is because it is merely a survey that collects information on various indicators. There is no formal controlled exploration of the relationship between a specific response variable and specific explanatory variables. 
+
+Reliably making causal links requires an experiment with:
+
+- a controlled treatment/procedure of interest and a control group
+
+- random assignment of the sample population to the control and treatment groups
+
+This is out-of-scope for the BRFSS. Therefore, the BRFSS data can be used to make find correlational (and generalizable) links between variables, that can prompt further study by formal experiments. In addition it can be used to track patterns on an annual basis.
+
+* * *
+
+
+## Part 2: Research questions
+
+
+**Research quesion 1: Is the average daily amount of sleep related to the mental health for adults in the US? (Physical activity is treated as a confounding variable)**
+
+Mental health problems such as social anxiety or emotional issues are a common but often neglected type of disorder that many Americans face. Treatment options include involved methods such as medication or psychotherapy. However, it would be interesting to explore if lifestyle changes such as the amount of sleep an adult gets per day can affect the incidence of mental health issues. If an association is detected, it can be very useful for medical professionals determining treatments, and for adults trying to relieve themsleves with less severe mental health issues.
+
+
+**Research quesion 2: Does the daily intake of fruits and vegetables vary by state among adults in the US?**
+
+National dietary guidelines mandate that adults must consume fruits and vegetables multiple times daily for sufficient nutrition intake and long-term health benefits. However, actual intake may vary due to a myriad of factors including cost, accessibility, or cuisine characteristics. It would be interesting to understand if there is any geographic variability across states in the US. Any correlation would be useful for federal agencies to focus efforts in specific locations. It may also be beneficial to understand which states are succeeding in improve their population's nutrition.
+
+
+**Research quesion 3: Do income levels and proximity to metropolitan areas correlate with obesity levels among adults in the US?**
+
+Obesity is a major health issue in the US, with 28% of BRFSS sample respondents qualifying as obese. Obesity has been found to enable various other medical conditions. It would be interesting to understand if income levels have any correlation with obesity levels. Another interesting possibly associated variable is proximity to metropolitan areas. People are more prone to drive outside urban areas. Policy makers would find these information useful to target specific populations or areas to reduce obesity levels.
+
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+
+**Research quesion 1: Is the average daily amount of sleep related to the mental health for adults in the US? (Physical activity is treated as a confounding variable)**
+
+To address the research question using the BRFSS dataset, the following variables are used [2]:
+
+- `sleptim1`: average number of hours of sleep in a 24h time period
+- `menthlth`: number of days in the past 30 days that the participant's mental health was not good.
+- `_pacat1`: a calculated variable that categorizes how active the participant is.
+
+For the sake of this study, `sleptim1` is treated as an explanatory variable, `menthlth` is treated as a response variable, and `_pacat1` (physical activity) is treated as a confounding variable. This was chosen because physical activity is also known to influence mental health. Moreover, those who perform more physical activity may require more sleep.
+
+To perform the analysis, the data is first preprocessed. Specifically, the relevant variables are first 'selected' from the dataset and filtered to remove any unusable rows with NA entries. Histograms of `sleptim1` and `menthlth` are then plotted.
+
+The `sleptim1` distribution shows a unimodal and symmetric distribution. Most adults received 7h of sleep a day. The distribution is heavily concentrated about the median, with an IQR of 2. The data is restricted to to between 2 and 15, to remove outliers that may be data entry errors.
+
+The `menthlth` distribution is heavily left-skewed. The vast majority of participants fortunately reported 0 days of mental health issues. To simplify the analysis, a calculated boolean variable, `ment_health_issue` is made to identify those with, and those without mental health issues.
+
+The `_pacat1` variable provides four levels to categorize physical activity. This is simplified to just "active" and "inactive" in a new variable, `activity`.
+
+```{r rq1 pre-process}
+raw_rq1 <- brfss2013 %>% 
+  select(sleptim1, menthlth, X_pacat1, X_llcpwt) %>% 
+  filter_all(all_vars(!is.na(.))) %>%
+  mutate(weight = X_llcpwt/sum(X_llcpwt)*n())
+
+raw_rq1 %>% summarise(mean=mean(sleptim1),
+                      median=median(sleptim1),
+                      sd=sd(sleptim1),
+                      IQR=IQR(sleptim1))
+
+raw_rq1 %>% summarise(mean=mean(menthlth),
+                      median=median(menthlth),
+                      sd=sd(menthlth),
+                      IQR=IQR(menthlth))
+
+ggplot(data=raw_rq1, aes(x=sleptim1, weight=weight)) + geom_histogram(binwidth=1)
+
+ggplot(data=raw_rq1, aes(x=menthlth, weight=weight)) + geom_histogram(binwidth=1)
+
+clean_rq1 <- raw_rq1 %>%
+  filter(sleptim1 <= 15, sleptim1 > 1) %>%
+  mutate(ment_health_issue = ifelse(menthlth>0, TRUE, FALSE)) %>%
+  select(-menthlth) %>%
+  mutate(activity = ifelse(X_pacat1 == "Highly active" | X_pacat1 == "Active",
+                           "active", "inactive"))
+
+p_mhealth_us = sum(clean_rq1$ment_health_issue*clean_rq1$weight)/sum(clean_rq1$weight)
+q_mhealth_us = 1 - p_mhealth_us
+```
+
+Having cleaned the input data, a final table for analysis and visualization is made. This is done by grouping by inactive vs active, and the different hours of sleep. For each activity/sleep-time, `ment_health_rat` is calculated. This is the ratio of the number of people with mental issues vs the total number of people in the category (weighted per [4]). The p-value to get the result is also calculated using the `p_mhealth_us` parameter derived from the overall dataset. The chance having mental heatlh issues is modeled as a binomial distribution with p=`p_mhealth_us`. The p-value is then calculated for each activity/sleep-time category using the normal approximation to the binomial distribution.
+
+```{r rq1 final}
+
+final_rq1 <- clean_rq1 %>%
+  group_by(activity, sleptim1) %>%
+  summarise(n_total = sum(weight),
+            n_ment_health = sum(ment_health_issue*weight),
+            ment_health_rat = n_ment_health/sum(weight),
+            z_value = abs(n_ment_health - sum(weight)*p_mhealth_us)/
+              (sum(weight)*p_mhealth_us*q_mhealth_us)^0.5,
+            p_value = pnorm(-z_value)
+  )
+
+ggplot(data=final_rq1, aes(x=sleptim1, y=ment_health_rat, color=activity)) + 
+  geom_line() + 
+  geom_point() + 
+  theme(legend.position = "right")
+
+ggplot(data=final_rq1, aes(x=sleptim1, y=p_value, color=activity)) + 
+  geom_line() + 
+  geom_point() + 
+  theme(legend.position = "right") + 
+  scale_y_log10(limits = c(NA, 0.05))
+```
+
+Two plots are presented to answer research question 1. The first shows the relationship between the mental health ratio with the number of hours of sleep per day and physical activity. The plots suggest an ideal amount of sleep of 8h per day. This level correlates to the minimum ratio of participants with mental health issues. As the amount of sleep increases or decreases away from 8h, the ratio of people with mental health increases. The second plot presents p-values for the mental health relationship with sleep-time. Almost all  p-values are significantly less than 0.01. This suggests that the correlation is almost definitely not due to chance.
+
+The first plot also suggests a clear correlation between physical activity and mental health. This is because there is a distinct reduction in the mental heatlh ratio for those who are more active in the sample.
+
+Ultimately the analysis is exploratory and can only enable inferences of correlation within the population of interest (US adults). The results suggest that formal experimental studies should be performed to further understand any causal relationship between sleep, mental health, and physical activity. 
+
+
+
+**Research quesion 2: Does the daily intake of fruits and vegetables vary by state among adults in the US?**
+
+To address the research question using the BRFSS dataset, the following variables are used [2]:
+
+- `_state`: the state represented by each participant
+- `vegeda1_`: a calculated variable defining the number of times the participant intakes vegetables per day *(2 implied decimal spaces)*
+- `frutda1_`: a calculated variable defining the number of times the participant intakes fruits per day *(2 implied decimal spaces)*
+
+For the sake of this study, `_state` is treated as an explanatory variable, and `vegeda1_` and `frutda1_` are treated as a response variables. These variables are the most direct available representations of the research question from the BRFSS dataset. 
+
+To perform the analysis, the data is first preprocessed. Specifically, the relevant variables are first 'selected' from the dataset and filtered to remove any unusable rows with NA entries. Histograms of the response variables are then plotted.
+
+The distributions for `vegeda1_` and `frutda1_` are both right-skewed and unimodal. A typical adult in the US consumes vegetables once a day (median = 100). A typical adult in the US consumes fruits less than once a day (median = 70). The histograms show significant outliers with values above 500 (5 times a day). These are clearly outliers since the entire IQR range is less than 1 standard deviation in both distributions. The outliers are removed to make the data more representative. Finally, the response variables are divided by 100 to account for the 2 implied decimal spaces.
+
+
+```{r rq2 pre-process}
+raw_rq2 <- brfss2013 %>% 
+  select(X_state, vegeda1_, frutda1_, X_llcpwt) %>% 
+  filter_all(all_vars(!is.na(.))) %>%
+  mutate(weight = X_llcpwt/sum(X_llcpwt)*n())
+
+raw_rq2 %>% summarise(mean=mean(vegeda1_),
+                      median=median(vegeda1_),
+                      sd=sd(vegeda1_),
+                      IQR=IQR(vegeda1_),
+                      max=max(vegeda1_))
+
+raw_rq2 %>% summarise(mean=mean(frutda1_),
+                      median=median(frutda1_),
+                      sd=sd(frutda1_),
+                      IQR=IQR(frutda1_),
+                      max=max(frutda1_))
+
+ggplot(data=raw_rq2, aes(x=vegeda1_, weight=weight)) + geom_histogram(binwidth=50) + xlim(0,1000)
+
+ggplot(data=raw_rq2, aes(x=frutda1_, weight=weight)) + geom_histogram(binwidth=50) + xlim(0, 1000)
+
+clean_rq2 <- raw_rq2 %>%
+  filter(vegeda1_ <= 400, frutda1_ <= 500) %>%
+  mutate(fruits = frutda1_/100) %>%
+  mutate(veg = vegeda1_/100) %>%
+  select(-vegeda1_, -frutda1_)
+```
+
+Intensity maps of the fruit and vegetable intake are plotted to best delinate the relationship between the states and response variables. The intensity maps plot the mean fruit and vegetable intake for each state on the US mainland. To do so, the cleaned dataframe is further processed by grouping by state and calculating summary variables. The median values are weighted as required from the BRFSS dataset [4].
+
+
+```{r rq2 final}
+map <- map_data("state")
+mapped_states = unique(map$region)
+
+final_rq2 <- clean_rq2 %>%
+  filter(tolower(X_state) %in% mapped_states) %>%
+  group_by(X_state) %>%
+  summarise(n_total = n(),
+            mean_fruit = sum(fruits*weight)/sum(weight),
+            mean_veg = sum(veg*weight)/sum(weight),
+  )
+
+ggplot(data=final_rq2, aes(fill=mean_fruit)) +
+  geom_map(aes(map_id=tolower(X_state)), color="white", map=map) + 
+  expand_limits(x=map$long, y=map$lat) +
+  coord_fixed(ratio = 1.3) +
+  scale_fill_gradient(low="magenta", high="yellow")
+
+ggplot(data=final_rq2, aes(fill=mean_veg)) +
+  geom_map(aes(map_id=tolower(X_state)),color="white", map=map) + 
+  expand_limits(x=map$long, y=map$lat) +
+  coord_fixed(ratio = 1.3) +
+  scale_fill_viridis_b()
+
+```
+
+The presented intensity plots appear to show a trend of increased fruit and vegetable intake among the north and west states, vs the south and east states (but away from the coast). This is seen by the darker colours near Louisiana, Mississippi, and Alabama vs the lighter hughes in Montana, Idaho, and Oregon.
+
+The data therefore suggests a correlation between states and nutrition. However, the correlation may be weak since the presented range of means are within the calculated inter-quartile ranges for the entire dataset (0.67 times/day for fruits, 0.60 times/day for vegetables). Additional statistical checks such as comparing overall state distributions with the national distributions may give more insight into the strength of the relationship.
+
+Finally, additional research on correlations with other variables with state-by-state differences is required to better understand why there may be  variations by state, eg: income/ differences in cuisine/ accessibility to fresh fruits/vegetables.
+
+
+
+**Research quesion 3: Do income levels and proximity to metropolitan areas correlate with obesity levels among adults in the US?**
+
+To address the research question using the BRFSS dataset, the following variables are used [2]:
+
+- `_bmi5`: the body mass index of the participant (bmi, *2 implied decimal spaces*)
+- `income2`: income level of the particant
+- `mscode`: metropolitan status code - provides information on proximity to urban towns/cities vs rural areas
+
+For the sake of this study, `_bmi5` is treated as an explanatory variable, and `income2` and `mscode` are treated as a response variables. These variables are the most direct available representations of the research question from the BRFSS dataset. 
+
+To perform the analysis, the data is first preprocessed. Specifically, the relevant variables are first 'selected' from the dataset and filtered to remove any unusable rows with NA entries. Histograms of the response variables are then plotted.
+
+The distribution for `_bmi5` is right-skewed and unimodal. A typical adult in the US has a bmi of 27 (median = 2712), which is in the overweight cateogry. The maximum value is a bmi of 89 and minimum of 0.01. These are clearly outliers per the distribution. The variable is capped to between 1000 and 5000 so that it better represents the population. The variable is divided by 100 to account for the 2 implied decimal spaces. An additional boolean variable is made to differentiate obese from non-obese individuals.
+
+The `income2` distribution shows counts increasing so that the most common category is >$75k. The variable may have been more useful with more higher categories. It is not processed any further.
+
+The `mscode` distribution shows that most participants lived very close to cities. This matches with census data that suggests under a quarter of the US population lives in rural areas [5].
+
+
+```{r rq3 pre-process}
+raw_rq3 <- brfss2013 %>% 
+  select(X_bmi5, income2, mscode, X_llcpwt) %>% 
+  filter_all(all_vars(!is.na(.))) %>%
+  mutate(weight = X_llcpwt/sum(X_llcpwt)*n())
+
+raw_rq3 %>% summarise(mean=mean(X_bmi5),
+                      median=median(X_bmi5),
+                      sd=sd(X_bmi5),
+                      IQR=IQR(X_bmi5),
+                      max=max(X_bmi5),
+                      min=min(X_bmi5))
+
+raw_rq3 %>% group_by(income2) %>% summarise(count=sum(weight))
+
+raw_rq3 %>% group_by(mscode) %>% summarise(count=sum(weight))
+
+ggplot(data=raw_rq3, aes(x=X_bmi5, weight=weight)) + 
+  geom_histogram(binwidth=200)
+
+ggplot(data=raw_rq3, aes(x=income2, weight=weight)) + 
+  geom_bar() +
+  scale_x_discrete(labels=function(x) str_wrap(x, width=10))
+
+ggplot(data=raw_rq3, aes(x=mscode, weight=weight)) + 
+  geom_bar() +
+  scale_x_discrete(labels=function(x) str_wrap(x, width=10))
+
+clean_rq3 <- raw_rq3 %>%
+  filter(X_bmi5 <= 5000, X_bmi5 >= 1000) %>%
+  mutate(bmi=X_bmi5/100) %>%
+  mutate(is_obese = ifelse(bmi>=30, TRUE, FALSE)) %>%
+  select(-X_bmi5)
+
+p_obese = sum(clean_rq3$is_obese*clean_rq3$weight)/sum(clean_rq3$weight)
+q_obese = 1 - p_obese
+
+```
+
+Intensity maps of the mean bmi and the obesity rate are plotted to visualize any correlations between the variables. To enable this, the cleaned dataset is further processed by grouping by the income and mscode categories. For each category, the bmi data is summarised into a weighted mean bmi, a weighted rate of obesity, and a p-value for the obesity ratio. The p-value is calculated using the `p_obese` parameter derived from the overall dataset. The chance of being obese is modeled as a binomial distribution with p=`p_obese`. The p-value is then calculated for each category using the normal approximation to the binomial distribution.
+
+
+```{r rq3 final}
+final_rq3 <- clean_rq3 %>%
+  group_by(income2, mscode) %>%
+  summarise(n_total = sum(weight),
+            mean_bmi = sum(bmi*weight)/sum(weight),
+            n_obese = sum(is_obese*weight),
+            obesity_rat = n_obese/n_total,
+            z_value = abs(n_obese - n_total*p_obese)/
+              (n_total*p_obese*q_obese)^0.5,
+            p_value = max(pnorm(-z_value), 1e-4)
+  )
+
+ggplot(data=final_rq3, aes(x=income2, y=mscode)) + 
+  geom_tile(aes(fill=mean_bmi)) + 
+  scale_x_discrete(labels=function(x) str_wrap(x, width=8)) + 
+  scale_y_discrete(labels=function(x) str_wrap(x, width=20)) +
+  scale_fill_gradient(low="cyan", high="royalblue")
+
+ggplot(data=final_rq3, aes(x=income2, y=mscode)) + 
+  geom_tile(aes(fill=obesity_rat)) + 
+  scale_x_discrete(labels=function(x) str_wrap(x, width=8)) + 
+  scale_y_discrete(labels=function(x) str_wrap(x, width=20)) +
+  scale_fill_gradient(low="lightskyblue", high="forestgreen")
+
+ggplot(data=final_rq3, aes(x=income2, y=mscode)) + 
+  geom_tile(aes(fill=p_value)) + 
+  scale_x_discrete(labels=function(x) str_wrap(x, width=8)) + 
+  scale_y_discrete(labels=function(x) str_wrap(x, width=20)) +
+  scale_fill_gradient(trans="log10")
+```
+
+The presented intensity plots appear to show a trend of increased BMI at lower income levels. This is seen by the lighter colours on the right side, and darker colours on the left side. There does not appear to be a correlation with the proximity to metropolitan areas. The obesity rate plot also matches the BMI plot with higher obesity rates at lower income levels. If true, this is a significant issue since it implies that lower income levels and worse health (obesity) commonly occurs together. Both of these seriously affect quality of life.  
+
+P-values for the obesity rate data are presented in the third plot. Most of the categories have p-values near 0.0001 (the actual p-value may be lower, but it was capped for plotting convenience). However, there are multiple categories with p-values close to 10%; i.e. there is a 10% probability that data more extreme could be found if the null hypothesis were true.
+
+The data seems to suggest a correlation between income and BMI. However, additional research with formal experimentation is required to make any causal inferences on the overall population. Such research would be useful for health policy makers.
+
+
+* * *
+
+## References
+
+[1] Overview: BRFSS 2013, CDC, Aug. 15, 2014.
+
+[2] BRFSS 2013 Codebook Report, CDC, Oct. 24 2014.
+
+[3] BRFSS 2013 Summary Data Quality Report, CDC, Aug. 15, 2014.
+
+[4] Module Data for Analysis for 2013 BRFSS, CDC, Aug. 14, 2014.
+
+[5] https://www.census.gov/newsroom/press-releases/2016/cb16-210.html

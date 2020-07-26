@@ -1,0 +1,233 @@
+---
+title: "Statistical inference with the GSS data"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+library(statsr)
+library(stringr)
+```
+
+### Load data
+
+```{r load-data}
+load("gss.Rdata")
+```
+
+
+* * *
+
+## Part 1: Data
+
+The General Social Survey (GSS) is a study that monitors changes in American society by using surveys with identical questions asked over a range of years, from 1972 to the present [1] (data until 2012 used for this project). The survey topics range from demographic and personal background data, to opinions on various societal and finanical issues.
+
+The survey population of interest is the adult, English-speaking, household population of the US (Spanish included since 2006). The survey employs a sophisticated stratified sampling methodology with slight variations over the years. The stratifications considered include age, race, location, and income levels. The surey is conducted in person by interviewers who visit designated households in the sample quotas. Due to the random sampling methodology with strata representing critical demographics, the survey is **generalizable** to the US adult population (97% of the total resident population as in 1985 [2]). However, the following biases may contribute to sampling error:
+
+<ul>
+  <li>**Non-response bias** <br>
+  Interviewers visit households in person to conduct the survey. Sometimes adults are unavailable to answer, or unwilling to answer specific questions.
+  </li>
+  <br>
+  <li> **Response bias** <br>
+  Respondents may incorrectly answer questions of the survey.
+  </li>
+</ul>
+
+The GSS data can provide strong evidence for correlational relationships. However, since the GSS is a general observation study and not an experiment with explicit random assignment and a control group, causation relationships cannot be provded.
+
+
+* * *
+
+## Part 2: Research question
+
+**Has the proportion of the US adult household population that does not view same-sex relations as 'wrong' changed between 1990 and 2012?**
+
+Media representations of same-sex relationships have steadily increased in the US over the past 30 years. Marriage between same-sex couples was also legalized in all 50 states over the period of 2004 to 2015. Despite legal and media representation, it is still unknown if attitudes of the majority population has actually changed significantly. To analyze this, the `homosex` question data from the GSS dataset can be used.
+
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+The research question can be addressed by the GSS variables `year` and `homosex`. The latter variable addresses respondents' opinion regarding same-sex sexual relations. The answer proportions are first calculated for survey years 1990 and 2012. A new column (`dprop`) is then calculating by subtracting hte 1990 proportion from the 2012 proportion. The final table is presented as a set of summary statistics. Note that the numbers are percentages. 
+
+The table shows that in 1990 and 2012, 'Always Wrong' is the most common response (other than NA). However, there is a significant 19% drop in the proportion of 'Always Wrong' in 2012. There is a corresponding 19% increase in the proportions of 'Not Wrong At All'. This suggests a positive trend in attitudes on same-sex relationships.
+
+Further clarity is provided in the first two bar plots showing frequencies of the `homosex` variable. The bar plots show that societal attitudes seem very polarized: people either consider same-sex relations as 'Always Wrong' or 'Never Wrong', with a very small proportion of the intermediate answers, 'Almost Always Wrong'/ 'Sometimes Wrong'.
+
+
+```{r summary statistics}
+
+# Isolate 1990 data and create a proportion variable
+clean_gss90 <- gss %>% filter(year==1990)
+prop90 <- clean_gss90 %>% group_by(homosex) %>%
+  summarise(p90=100*n()/nrow(clean_gss90))
+
+# Isolate 2012 data and create a proportion variable
+clean_gss12 <- gss %>% filter(year==2012)
+prop12 <- clean_gss12 %>% group_by(homosex) %>%
+  summarise(p12=100*n()/nrow(clean_gss12))
+
+# Join the dataframes together and then get the change in proportions
+delta <- prop90 %>% inner_join(prop12) %>% mutate(dprop=p12-p90)
+delta
+
+# Plot bar plots for the 1990 and 2012 data separately
+ggplot(clean_gss90, aes(x=homosex)) +
+  geom_bar() + 
+  labs(title="Attitudes on Same-Sex Sexual Relations",
+       subtitle="1990") +  scale_x_discrete(labels=function(x) str_wrap(x, width=10))
+
+ggplot(clean_gss12, aes(x=homosex)) +
+  geom_bar() + 
+  labs(title="Attitudes on Same-Sex Sexual Relations", 
+       subtitle="2012") +
+  scale_x_discrete(labels=function(x) str_wrap(x, width=10))
+
+
+```
+
+Further exploration of the year-by-year attitude change is presented by plotting a normalized bar plot of the `homosex` responses with respect to survey year. The plot suggests a distinct and consistent trend from 1990 to 2012 of improving attitudes to same-sex relations.
+
+
+```{r eda}
+
+# Isolate `year` and `homosex` variables and remove all NA rows
+clean_gss <- gss %>% filter(!is.na(homosex)) %>% select(year, homosex)
+
+ggplot(clean_gss, aes(x=year, fill=homosex)) +
+  geom_bar(position='fill') + 
+  labs(title="Attitudes on Same-Sex Sexual Relations",
+       subtitle="Response proportions over all survey years")
+
+```
+
+
+* * *
+
+## Part 4: Inference
+
+To formalize the explanatory comparisons, statistical inference is performed on the data via hypothesis testing and generating confidence intervals. The parameter of interest is the difference in proportions of 'Not Wrong At All' answers between 1990 and 2012. 
+
+**Hypotheses:**
+
+$H_0: p_{2012} - p_{1990} = 0$ <br>
+$H_A: p_{2012} - p_{1990} \ne 0$
+
+Assumed significance and confidence levels:
+
+$\alpha = 0.05$ <br>
+$CI = 95\%$
+
+
+```{r pre-process}
+
+# Create filtered dataframes to easily calculate proportions and # of successes
+same_sex90 <- gss %>% select(year, homosex) %>% 
+  filter(!is.na(homosex), year==1990) %>%
+  mutate(success=ifelse(homosex=='Not Wrong At All', 1, 0))
+
+same_sex12 <- gss %>% select(year, homosex) %>% 
+  filter(!is.na(homosex), year==2012) %>%
+  mutate(success=ifelse(homosex=='Not Wrong At All', 1, 0))
+
+# Calculate # of successes and sample/pool proportions
+n90 = nrow(same_sex90)
+n12 = nrow(same_sex12)
+
+p90 = sum(same_sex90$success)/n90
+p12 = sum(same_sex12$success)/n12
+ppool = (sum(same_sex90$success) + sum(same_sex12$success))/(n90 + n12)
+
+print("Success-failure conditions for Hypothesis Test:")
+n90*ppool
+n90*(1-ppool)
+n12*ppool
+n12*(1-ppool)
+
+print("Success-failure conditions for Confidence Interval:")
+n90*p90
+n90*(1-p90)
+n12*p12
+n12*(1-p12)
+
+```
+
+
+**CLT conditions for Hypothesis Testing and Confidence Intervals:**
+
+<ul>
+  <li> The GSS data is from a random sample. </li>
+  <li> n < 10% of the population (US adult household population) in all groups. </li>
+  <li> Using the group and pooled proportions, there are more than 10 successes and failures (see computations above) </li>
+  <li> Observations are effectively independent within groups, as they are from different, randomly sampled adults. </li>
+  <li> Observations between groups were taken years apart, and are therefore independent with different random samples. Hence the groups are independent of each other.</li>
+</ul>
+
+
+**Methods of Inference:**
+
+Since all conditions are met, theoretical (CLT) methods can be used to perform a hypothesis test and generate a confidence interval. This problem involves two categorical variables (`year` and `homosex`). The`homosex` categorical variable is converted to a 2-level 'success-failure' category so that proportions can be calculated. Only two years are considered, so there are two 2-level categorical variables that can be evaluated using the difference in proportions, $p_{2012} - p_{1990}$. 
+
+The hypothesis test/ confidence interval theoretical methods are based on the Central Limit Theorem (CLT). The methods are a result of the CLT outcome that the sampling distribution of population parameters such as the proportion are nearly normally distributed, with a standard error defined as a function of the sample error and sample size. This is applicable provided the CLT conditions are met (as shown above).
+
+To perform the statistical inference, the data is first pre-processed to remove all the NA rows, and isolate the 1990 and 2012 years. In addition, the `homosex` is mutated to only have 2 levels, "Not Wrong" ("Not Wrong At All"), and "Wrong" (all other levels).
+
+
+```{r hypothesis test}
+
+ht_df <- gss %>% select(year, homosex) %>% 
+  filter(!is.na(homosex), (year==1990 | year==2012)) %>% 
+  mutate(homosex=ifelse(
+    homosex=="Not Wrong At All", "Not Wrong", "Wrong")
+    )
+
+inference(y=homosex, x=as.factor(year), order=c(2012, 1990), data=ht_df,
+          statistic='proportion', success='Not Wrong',
+          method='theoretical', type='ht',
+          alternative='twosided', null=0)
+
+```
+
+The hypothesis test shows a p-value of < 0.0001 with a Z-test statistic of 15.48. The probability of achieving this, or a more extreme result by pure chance is thus extremely low. I.e. the data shows extremely strong evidence for the alternative hypothesis: the proportion of the US adult household population that does not view same-sex relations as `wrong` has increased between 1990 and 2012. The null hypothesis is rejected.
+
+
+```{r confidence interval}
+
+inference(y=homosex, x=as.factor(year), order=c(2012, 1990), data=ht_df,
+          statistic='proportion', success='Not Wrong',
+          method='theoretical', type='ci')
+
+```
+
+The confidence interval results agree with the previous hypothesis test. It can be stated with 95% confidence that $p_{2012} - p_{1990}$ has increased between 1990 and 2012 by between  28.2% and 35.3%.
+
+**Conclusion:**
+
+In summary, to answer the research question, there is strong evidence that non-negative attitudes to to same-sex relations have significantly increased between 1990 and 2012. 
+
+The difference in proportions with 'Not Wrong' views on same-sex relations is (28.2%, 35.3%) with 95% confidence.
+
+Further study on how this result varies with age and social class would be interesting and useful for LGBTQ activists to guarantee additional freedoms.
+
+
+## Part 5: References
+
+[1] http://gss.norc.org/About-The-GSS
+
+[2] ICPSR 34802, General Cumulative Survey 1972-2012 Codebook, Smith, Hout, Marsden.
+
+[3] https://en.wikipedia.org/wiki/Societal_attitudes_toward_homosexuality#United_States
+
+
+
